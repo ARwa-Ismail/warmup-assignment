@@ -355,4 +355,65 @@ function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, mont
 // rateFile: (typeof string) path to driver rates text file
 // Returns: integer (net pay)
 // ============================================================
+function getNetPay(driverID, actualHours, requiredHours, rateFile) {
+    function toSeconds(timeStr) {
+        const parts = timeStr.split(':').map(Number);
+        return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+    }
 
+    function getDriverRateInfo(id) {
+        const content = fs.readFileSync(rateFile, 'utf8');
+        const lines = content.split('\n');
+        for (let line of lines) {
+            line = line.trim();
+            if (line === '') continue;
+            
+            const parts = line.split(',').map(s => s.trim());
+            if (parts.length < 4) continue;
+
+            if (parts[0] === id) {
+                return {
+                    basePay: parseInt(parts[2], 10),
+                    tier: parseInt(parts[3], 10)
+                };
+            }
+        }
+        return null;
+    }
+
+    const rateInfo = getDriverRateInfo(driverID);
+
+    if (!rateInfo) return 0;
+
+    const { basePay, tier } = rateInfo;
+
+    const allowedMissing = { 1: 50, 2: 20, 3: 10, 4: 3 };
+    const allowed = allowedMissing[tier] || 0;
+
+    const actualSec = toSeconds(actualHours);
+
+    const requiredSec = toSeconds(requiredHours);
+
+    const missingSec = Math.max(0, requiredSec - actualSec);
+    const missingHoursFloat = missingSec / 3600;
+
+    const remainingFloat = Math.max(0, missingHoursFloat - allowed);
+    const billableHours = Math.floor(remainingFloat);
+
+
+    const dedRatePerHour = Math.floor(basePay / 185);
+    const salaryDed = billableHours * dedRatePerHour;
+    return basePay - salaryDed;
+}
+
+module.exports = {
+    getShiftDuration,
+    getIdleTime,
+    getActiveTime,
+    metQuota,
+    addShiftRecord,
+    setBonus,
+    countBonusPerMonth,
+    getTotalActiveHoursPerMonth,
+    getRequiredHoursPerMonth,
+    getNetPay};
